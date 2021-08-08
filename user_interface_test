@@ -1,0 +1,85 @@
+import numpy as np
+import cv2
+import time
+
+cap = cv2.VideoCapture(0)
+
+min_area = 1000
+ui_scale = 0.05
+font = cv2.FONT_HERSHEY_SIMPLEX
+exec_time = [0, 0, 0]  # processing time için geçen süre arrayi
+while True:
+    start_time = time.time()
+
+    # ----------------Capture Camera Frame-----------------
+    start_t0 = time.time()
+    success, frame = cap.read()
+    if not success:
+        break
+    height, width, channels = frame.shape
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    ret, thresh = cv2.threshold(gray, 127, 255, 1)
+    exec_time[0] = time.time() - start_t0
+    # ----------------------------------------------------
+
+    # -------------------Inference---------------------------------
+    start_t1 = time.time()
+    contours, h = cv2.findContours(thresh, 1, 2)
+
+    for cnt in contours:
+        approx = cv2.approxPolyDP(cnt, 0.01 * cv2.arcLength(cnt, True), True)
+        x, y = approx[0][0]
+        area = cv2.contourArea(cnt)
+
+        if len(approx) == 4 and min_area <= area < width * height * 0.8:
+            M = cv2.moments(cnt)
+            # print( M )
+
+            cx = int(M['m10'] / M['m00'])
+            cy = int(M['m01'] / M['m00'])
+            print("rectangle")
+            print("x: ", cx, "y: ", cy)
+            print("**")
+            cart = [0, 0, 0, 0]
+            cart[0] = width / 2 - 1  # x_ax_pos
+            cart[1] = height / 2 - 1  # y_ax_pos
+            cart[2] = cx - cart[0]  # x
+            cart[3] = - cy + cart[1]  # y
+            print(cart)
+
+            cv2.putText(frame, "X: " + str(cart[2]) + " Y: " + str(cart[3]), (cx + 20, cy + 20),
+                        cv2.FONT_HERSHEY_COMPLEX, .7,
+                        (0, 255, 0), 2)
+
+            cv2.drawContours(frame, [cnt], 0, 255, -1)
+            cv2.circle(frame, (cx, cy), 1, (0, 0, 255), 3)
+            # cv2.putText(frame, "Rectangle", (x, y), cv2.FONT_HERSHEY_COMPLEX, 1, 0,2)
+        else:
+            # dikdortgen bulunana kadar ne yapilacak onu bul
+            pass
+    exec_time[1] = time.time() - start_t1
+    # ----------------------------------------------------
+
+    # -----------------other------------------------------------
+    start_t2 = time.time()
+    # ui screen
+    cv2.rectangle(frame, (0, 0), (width, int(ui_scale*height)), (0, 0, 0), -1)
+    # write processing durations
+    time_cam = round(exec_time[0] * 1000, 0)
+    time_inf = round(exec_time[1] * 1000, 0)
+    time_oth = round(exec_time[2] * 1000, 0)
+    fps = round(1.0 / (time.time() - start_time), 1)
+    exec_time[2] = time.time() - start_t2
+    # show display
+    text_dur = 'FPS: {}     Camera: {}ms   Inference: {}ms   other: {}ms'.format(fps, time_cam, time_inf, time_oth)
+    cv2.putText(frame, text_dur, (10, int(ui_scale * height - 5)), font, 0.8, (255, 255, 255), 1)
+    cv2.imshow("frame", frame)
+    # ----------------------------------------------------
+    key = cv2.waitKey(1)
+    if key == 27:
+        break
+    # ----------------------------------------------------
+
+cap.release()
+cv2.destroyAllWindows()
